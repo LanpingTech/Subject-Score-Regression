@@ -13,7 +13,7 @@ grades = ['高一', '高二', '高三']
 ranks = ['甲', '乙', '丙', '丁']
 
 # Empty dataframe
-df = pd.DataFrame(columns = ['年纪'] + subjects + ['综合', '等级'])
+df = pd.DataFrame(columns = ['年级'] + subjects + ['综合', '等级'])
 
 # Generate data randomly
 num_students = 5000

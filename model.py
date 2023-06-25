@@ -48,3 +48,35 @@ class DCN(torch.nn.Module):
         x = torch.cat([x_cross, x_deep], dim=1)
         return self.regressor(x), self.classifier(x)
 
+
+class DCN1(torch.nn.Module):
+    def __init__(self, dim_input, dim_cate, dim_num, layer_num=3):
+        super(DCN1, self).__init__()
+        self.dim_cate = dim_cate
+        self.dim_num = dim_num
+
+        self.to_embed = torch.nn.Embedding(3, 10)
+        dim_input += 9
+        self.cross_network = CrossNetwork(dim_input, layer_num)
+        self.deep_network = DeepNetwork(dim_input, layer_num)
+
+        self.classifiers = []
+        for i in range(len(dim_cate)):
+            self.classifiers.append(torch.nn.Linear(dim_input * 2, dim_cate[i]))
+        self.regressors = []
+        for i in range(dim_num):
+            self.regressors.append(torch.nn.Linear(dim_input * 2, 1))
+
+    def forward(self, x):
+        x_discrete = self.to_embed(x[:, :1].long()).squeeze(1)
+        x = torch.cat([x_discrete, x[:, 1:]], dim=1)
+        x_cross = self.cross_network(x)
+        x_deep = self.deep_network(x)
+        x = torch.cat([x_cross, x_deep], dim=1)
+
+        arr = []
+        for i in range(len(self.dim_cate)):
+            arr.append(self.classifiers[i](x))
+        for i in range(self.dim_num):
+            arr.append(self.regressors[i](x))
+        return tuple(arr)
