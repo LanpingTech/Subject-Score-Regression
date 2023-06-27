@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 GRADE_DICT = {'高一': 0, '高二': 1, '高三': 2}
 RANK_DICT = {'甲': 0, '乙': 1, '丙': 2, '丁': 3}
 
+
 class ScoreDataset(Dataset):
     def __init__(self, data_path):
         self.data = pd.read_csv(data_path)
@@ -27,9 +28,10 @@ class ScoreDataset(Dataset):
 
 class DynamicDataset(Dataset):
 
-    def __init__(self, conf, data):
+    def __init__(self, conf, data, predict=False):
         self.conf = conf
         self.data = data
+        self.predict = predict
 
         self.item_list = []
         for idx in range(len(self.data)):
@@ -40,17 +42,18 @@ class DynamicDataset(Dataset):
             for cate in self.conf['features_cate']:
                 feature = self.conf['features'][cate]
                 feature_cate.append(feature['dict'][row_data[feature['code']]])
-            feature_cate = torch.LongTensor(feature_cate)
+            feature_cate = torch.LongTensor(feature_cate) if len(feature_cate) > 0 else []
             feature_num = row_data[self.conf['features_num']].values.astype(float)
-
-            label_cate = []
-            for cate in self.conf['labels_cate']:
-                label = self.conf['labels'][cate]
-                label_cate.append(label['dict'][row_data[label['code']]])
-            label_cate = torch.LongTensor(label_cate)
-            label_num = row_data[self.conf['labels_num']].values.astype(float)
-
-            self.item_list.append((feature_cate, feature_num, label_cate, label_num))
+            if predict:
+                self.item_list.append((feature_cate, feature_num))
+            else:
+                label_cate = []
+                for cate in self.conf['labels_cate']:
+                    label = self.conf['labels'][cate]
+                    label_cate.append(label['dict'][row_data[label['code']]])
+                label_cate = torch.LongTensor(label_cate) if len(label_cate) > 0 else []
+                label_num = row_data[self.conf['labels_num']].values.astype(float)
+                self.item_list.append((feature_cate, feature_num, label_cate, label_num))
 
     def __len__(self):
         return len(self.data)
@@ -61,12 +64,29 @@ class DynamicDataset(Dataset):
     def dim_input(self):
         return len(self.conf['features'])
 
-    def dim_cate(self):
+    def in_dim_cate(self):
         arr = []
-        for category in self.conf['labels_cate']:
-            label = self.conf['labels'][category]
+        for cate in self.conf['features_cate']:
+            label = self.conf['features'][cate]
             arr.append(len(label['dict']))
         return arr
 
-    def dim_num(self):
+    def in_dim_num(self):
+        return len(self.conf['features_num'])
+
+    def out_dim_cate(self):
+        arr = []
+        for cate in self.conf['labels_cate']:
+            label = self.conf['labels'][cate]
+            arr.append(len(label['dict']))
+        return arr
+
+    def out_dim_num(self):
         return len(self.conf['labels_num'])
+
+    def get_features_titles(self):
+        return [*self.conf['features']]
+
+    def get_features_data(self, idx):
+        row_data = self.data.iloc[idx]
+        return row_data[self.get_features_titles()].tolist()

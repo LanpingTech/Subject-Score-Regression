@@ -50,33 +50,43 @@ class DCN(torch.nn.Module):
 
 
 class DCN1(torch.nn.Module):
-    def __init__(self, dim_input, dim_cate, dim_num, layer_num=3):
+    def __init__(self, in_dim_cate, in_dim_num, out_dim_cate, out_dim_num, layer_num=3):
         super(DCN1, self).__init__()
-        self.dim_cate = dim_cate
-        self.dim_num = dim_num
+        self.in_dim_cate = in_dim_cate
+        self.in_dim_num = in_dim_num
+        self.out_dim_cate = out_dim_cate
+        self.out_dim_num = out_dim_num
+        # 每个输入离散值转化成10维向量
+        self.cate_dim = 10
 
-        self.to_embed = torch.nn.Embedding(3, 10)
-        dim_input += 9
-        self.cross_network = CrossNetwork(dim_input, layer_num)
-        self.deep_network = DeepNetwork(dim_input, layer_num)
+        self.cross_network = CrossNetwork(len(in_dim_cate) * self.cate_dim + in_dim_num, layer_num)
+        self.deep_network = DeepNetwork(len(in_dim_cate) * self.cate_dim + in_dim_num, layer_num)
 
+        self.to_embeds = []
+        for i in range(len(in_dim_cate)):
+            self.to_embeds.append(torch.nn.Embedding(in_dim_cate[i], self.cate_dim))
         self.classifiers = []
-        for i in range(len(dim_cate)):
-            self.classifiers.append(torch.nn.Linear(dim_input * 2, dim_cate[i]))
+        for i in range(len(out_dim_cate)):
+            self.classifiers.append(torch.nn.Linear((len(in_dim_cate) * self.cate_dim + in_dim_num) * 2, out_dim_cate[i]))
         self.regressors = []
-        for i in range(dim_num):
-            self.regressors.append(torch.nn.Linear(dim_input * 2, 1))
+        for i in range(out_dim_num):
+            self.regressors.append(torch.nn.Linear((len(in_dim_cate) * self.cate_dim + in_dim_num) * 2, 1))
 
     def forward(self, x):
-        x_discrete = self.to_embed(x[:, :1].long()).squeeze(1)
-        x = torch.cat([x_discrete, x[:, 1:]], dim=1)
+        x_discrete = []
+        for i in range(len(self.in_dim_cate)):
+            x_discrete.append(self.to_embeds[i](x[:, i:i+1].long()).squeeze(1))
+
+        x_discrete.append(x[:, len(self.in_dim_cate):])
+        x = torch.cat(x_discrete, dim=1)
+
         x_cross = self.cross_network(x)
         x_deep = self.deep_network(x)
         x = torch.cat([x_cross, x_deep], dim=1)
 
         arr = []
-        for i in range(len(self.dim_cate)):
+        for i in range(len(self.out_dim_cate)):
             arr.append(self.classifiers[i](x))
-        for i in range(self.dim_num):
+        for i in range(self.out_dim_num):
             arr.append(self.regressors[i](x))
         return tuple(arr)
